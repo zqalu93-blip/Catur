@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Catur Mobile Ajaib</title>
+    <style>
+        /* CSS untuk Tampilan Menarik & Mobile Friendly */
+        :root {
+            --board-size: min(90vw, 400px); /* Ukuran papan maksimal 90% viewport width atau 400px */
+            --square-size: calc(var(--board-size) / 8);
+            --light-color: #f0d9b5; /* Krem Muda */
+            --dark-color: #b58863;  /* Cokelat Tua */
+            --highlight-color: rgba(255, 255, 0, 0.5); /* Kuning Transparan untuk pilihan */
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #2c3e50; /* Background gelap */
+            font-family: Arial, sans-serif;
+            -webkit-user-select: none; /* Mencegah seleksi teks di mobile */
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+
+        #game-container {
+            width: var(--board-size);
+            margin: 20px 0;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
+            border-radius: 5px;
+        }
+
+        #chessboard {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            width: 100%;
+            height: var(--board-size);
+            border: 5px solid #34495e; /* Border papan */
+        }
+
+        .square {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: calc(var(--square-size) * 0.8);
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        /* Warna Petak */
+        .light { background-color: var(--light-color); }
+        .dark { background-color: var(--dark-color); }
+
+        /* Status Petak */
+        .selected { background-color: var(--highlight-color) !important; }
+        .movable:after {
+            content: '';
+            position: absolute;
+            width: 30%;
+            height: 30%;
+            border-radius: 50%;
+            background-color: rgba(0, 255, 0, 0.4); /* Titik hijau untuk gerakan legal */
+        }
+        
+        .piece {
+            /* Unicode catur: K, Q, R, B, N, P */
+            cursor: grab;
+            touch-action: none; /* Penting untuk gesture touch/drag */
+            position: relative;
+            z-index: 10;
+        }
+
+        .white-piece { color: #f9f9f9; text-shadow: 1px 1px 2px #333; }
+        .black-piece { color: #333333; text-shadow: 1px 1px 2px #f9f9f9; }
+
+        #status {
+            color: #ecf0f1;
+            margin-top: 10px;
+            font-size: 1.2em;
+        }
+    </style>
+</head>
+<body>
+
+    <h1 style="color: white; margin-bottom: 5px;">Catur Mobile</h1>
+    <div id="game-container">
+        <div id="chessboard">
+            </div>
+    </div>
+    <div id="status">Giliran Putih</div>
+
+    <script>
+        // JS untuk Logika Game Catur dan Gesture Touch
+        const chessboard = document.getElementById('chessboard');
+        const statusDisplay = document.getElementById('status');
+        
+        // Simbol Unicode Catur
+        const PIECES = {
+            'R': '♖', 'N': 'B', 'B': '♗', 'Q': '♕', 'K': '♔', 'P': '♙', // Putih
+            'r': '♜', 'n': 'b', 'b': '♝', 'q': '♛', 'k': '♚', 'p': '♟'  // Hitam
+        };
+
+        // Representasi Papan (FEN-like, tapi disederhanakan)
+        let boardState = [
+            ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
+            ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'],
+            ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R']
+        ];
+        
+        let turn = 'white'; // 'white' atau 'black'
+        let selectedSquare = null;
+
+        // --- FUNGSI TAMPILAN (DOM) ---
+
+        function drawBoard() {
+            chessboard.innerHTML = '';
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const square = document.createElement('div');
+                    square.classList.add('square');
+                    square.dataset.row = r;
+                    square.dataset.col = c;
+                    
+                    // Tentukan warna petak
+                    const isLight = (r + c) % 2 === 0;
+                    square.classList.add(isLight ? 'light' : 'dark');
+
+                    // Letakkan bidak (jika ada)
+                    const pieceCode = boardState[r][c];
+                    if (pieceCode) {
+                        const piece = document.createElement('span');
+                        piece.classList.add('piece');
+                        piece.classList.add(pieceCode === pieceCode.toUpperCase() ? 'white-piece' : 'black-piece');
+                        piece.textContent = PIECES[pieceCode];
+                        piece.dataset.piece = pieceCode; // Menyimpan jenis bidak
+                        square.appendChild(piece);
+                    }
+
+                    // Tambahkan event listener untuk sentuhan/klik
+                    square.addEventListener('click', handleSquareClick);
+                    
+                    // Tambahkan event listener untuk gesture (drag/touch) di sini
+                    // square.addEventListener('touchstart', handleTouchStart);
+                    // ... dan event lainnya
+                    
+                    chessboard.appendChild(square);
+                }
+            }
+        }
+        
+        // --- FUNGSI LOGIKA DASAR ---
+        
+        function isValidMove(startR, startC, endR, endC) {
+            // Placeholder: Implementasi logika catur yang sebenarnya (sangat kompleks!)
+            // Di sini Anda akan menggunakan Library seperti chess.js jika ini adalah proyek serius.
+            // Untuk HTML sederhana, Anda perlu menulis semua logika:
+            // 1. Cek apakah bidak di posisi awal milik pemain yang sedang giliran
+            // 2. Cek apakah petak tujuan tidak diisi oleh bidak sendiri
+            // 3. Cek peraturan pergerakan bidak (misal: Benteng bergerak lurus, Kuda berbentuk L)
+            // 4. Cek apakah gerakan tersebut tidak meninggalkan Raja dalam keadaan 'Check'
+            
+            // Contoh sederhana: Bidak harus pindah ke petak kosong atau bidak lawan
+            const piece = boardState[startR][startC];
+            const targetPiece = boardState[endR][endC];
+            
+            if (!piece) return false;
+
+            const isWhitePiece = piece === piece.toUpperCase();
+            const isWhiteTurn = turn === 'white';
+            
+            if (isWhitePiece !== isWhiteTurn) return false; // Bidak bukan milik pemain yang giliran
+
+            if (targetPiece) {
+                const isTargetWhite = targetPiece === targetPiece.toUpperCase();
+                if (isTargetWhite === isWhitePiece) return false; // Petak tujuan diisi bidak sendiri
+            }
+            
+            // ************ LOGIKA PERGERAKAN SPESIFIK BIDAK DIBUTUHKAN DI SINI ************
+            
+            // Jika semua cek lulus (sederhana):
+            return true; 
+        }
+
+        function movePiece(startR, startC, endR, endC) {
+            // Pindahkan bidak di array boardState
+            boardState[endR][endC] = boardState[startR][startC];
+            boardState[startR][startC] = '';
+            
+            // Ganti giliran
+            turn = turn === 'white' ? 'black' : 'white';
+            statusDisplay.textContent = 'Giliran ' + (turn === 'white' ? 'Putih' : 'Hitam');
+            
+            // Gambar ulang papan
+            drawBoard();
+            
+            // Tambahkan logika cek, skakmat, promosi bidak, dll. di sini.
+        }
+
+
+        // --- FUNGSI EVENT HANDLER ---
+
+        function clearHighlights() {
+            document.querySelectorAll('.square').forEach(sq => {
+                sq.classList.remove('selected', 'movable');
+            });
+        }
+        
+        function highlightLegalMoves(r, c) {
+            // Placeholder untuk menyorot petak tujuan yang legal
+            for (let i = 0; i < 8; i++) {
+                for (let j = 0; j < 8; j++) {
+                    // Cek jika pergerakan (r, c) ke (i, j) adalah valid
+                    if (isValidMove(r, c, i, j)) {
+                        const targetSquare = document.querySelector(`[data-row="${i}"][data-col="${j}"]`);
+                        if (targetSquare) {
+                            targetSquare.classList.add('movable');
+                        }
+                    }
+                }
+            }
+        }
+        
+        function handleSquareClick(event) {
+            const square = event.currentTarget;
+            const r = parseInt(square.dataset.row);
+            const c = parseInt(square.dataset.col);
+            const pieceCode = boardState[r][c];
+
+            if (selectedSquare) {
+                // Ada petak yang sudah dipilih
+                const startR = parseInt(selectedSquare.dataset.row);
+                const startC = parseInt(selectedSquare.dataset.col);
+                
+                // Cek apakah petak tujuan sama dengan petak asal (untuk batal pilih)
+                if (startR === r && startC === c) {
+                    selectedSquare = null;
+                    clearHighlights();
+                    return;
+                }
+                
+                // Coba pindahkan bidak
+                if (isValidMove(startR, startC, r, c)) {
+                    movePiece(startR, startC, r, c);
+                }
+                
+                // Reset pilihan
+                selectedSquare = null;
+                clearHighlights();
+
+            } else if (pieceCode) {
+                // Tidak ada petak yang dipilih, dan ada bidak di petak ini
+                const isWhitePiece = pieceCode === pieceCode.toUpperCase();
+                const isWhiteTurn = turn === 'white';
+
+                if (isWhitePiece === isWhiteTurn) {
+                    // Pilih bidak
+                    selectedSquare = square;
+                    clearHighlights();
+                    square.classList.add('selected');
+                    highlightLegalMoves(r, c);
+                }
+            }
+        }
+
+        // --- FUNGSI GESTURE TOUCH (Drag and Drop) ---
+
+        let draggedPiece = null;
+        
+        function handleTouchStart(e) {
+            const pieceEl = e.target.closest('.piece');
+            if (!pieceEl) return;
+            
+            e.preventDefault(); // Mencegah scrolling browser saat drag
+            
+            const square = pieceEl.closest('.square');
+            const pieceCode = boardState[square.dataset.row][square.dataset.col];
+            const isWhitePiece = pieceCode === pieceCode.toUpperCase();
+            const isWhiteTurn = turn === 'white';
+            
+            // Hanya bisa drag bidak yang gilirannya
+            if (isWhitePiece !== isWhiteTurn) return;
+
+            draggedPiece = pieceEl;
+            
+            // Buat 'ghost' bidak yang mengikuti jari
+            draggedPiece.style.position = 'absolute';
+            draggedPiece.style.zIndex = 1000;
+            draggedPiece.style.opacity = 0.8;
+            document.body.appendChild(draggedPiece); // Pindahkan ke body agar bisa mengikuti di luar petak
+
+            // Simpan petak asal dan highlight
+            selectedSquare = square;
+            clearHighlights();
+            square.classList.add('selected');
+            highlightLegalMoves(parseInt(square.dataset.row), parseInt(square.dataset.col));
+            
+            // Panggil fungsi untuk memposisikan bidak
+            moveAt(e.touches[0].pageX, e.touches[0].pageY);
+
+            document.addEventListener('touchmove', handleTouchMove);
+            document.addEventListener('touchend', handleTouchEnd);
+        }
+
+        function moveAt(pageX, pageY) {
+            // Posisi bidak di tengah sentuhan jari
+            draggedPiece.style.left = pageX - draggedPiece.offsetWidth / 2 + 'px';
+            draggedPiece.style.top = pageY - draggedPiece.offsetHeight / 2 + 'px';
+        }
+
+        function handleTouchMove(e) {
+            if (draggedPiece) {
+                moveAt(e.touches[0].pageX, e.touches[0].pageY);
+            }
+        }
+
+        function handleTouchEnd(e) {
+            if (!draggedPiece) return;
+            
+            document.removeEventListener('touchmove', handleTouchMove);
+            document.removeEventListener('touchend', handleTouchEnd);
+
+            // 1. Dapatkan petak tujuan
+            draggedPiece.hidden = true;
+            let elemBelow = document.elementFromPoint(e.changedTouches[0].pageX, e.changedTouches[0].pageY);
+            draggedPiece.hidden = false;
+
+            let targetSquare = elemBelow ? elemBelow.closest('.square') : null;
+            
+            // 2. Lakukan pergerakan
+            if (targetSquare && selectedSquare) {
+                const startR = parseInt(selectedSquare.dataset.row);
+                const startC = parseInt(selectedSquare.dataset.col);
+                const endR = parseInt(targetSquare.dataset.row);
+                const endC = parseInt(targetSquare.dataset.col);
+
+                if (isValidMove(startR, startC, endR, endC)) {
+                    movePiece(startR, startC, endR, endC);
+                }
+            }
+            
+            // 3. Reset tampilan bidak
+            // Gambar ulang akan mengurus penempatan bidak yang baru, jika valid
+            // Jika gerakan tidak valid, bidak akan kembali ke posisi semula (karena drawBoard dipanggil atau tidak)
+            
+            clearHighlights();
+            draggedPiece.style.position = 'static'; 
+            draggedPiece.style.zIndex = 'auto';
+            draggedPiece.style.opacity = 1;
+            selectedSquare = null;
+            draggedPiece = null;
+            
+            drawBoard(); // Gambar ulang papan untuk memastikan posisi bidak benar
+        }
+
+        // Attach touch handler to the chessboard to handle all pieces
+        chessboard.addEventListener('touchstart', handleTouchStart);
+
+        // Inisialisasi Game
+        drawBoard();
+    </script>
+</body>
+</html>
